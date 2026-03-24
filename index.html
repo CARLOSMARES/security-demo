@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title> Análisis de Seguridad</title>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #000;
+      color: #00ff00;
+      font-family: 'VT323', 'Courier New', monospace;
+      min-height: 100vh;
+      overflow: hidden;
+      cursor: none;
+    }
+
+    #matrix-bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      opacity: 0.15;
+    }
+
+    .scanlines {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0) 50%,
+        rgba(0, 0, 0, 0.3) 50%
+      );
+      background-size: 100% 4px;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .container {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .glitch {
+      font-size: 3rem;
+      color: #ff0000;
+      text-transform: uppercase;
+      animation: glitch 0.3s infinite;
+      position: relative;
+    }
+
+    .glitch::before,
+    .glitch::after {
+      content: attr(data-text);
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .glitch::before {
+      color: #00ffff;
+      animation: glitch-1 0.3s infinite;
+      clip-path: polygon(0 0, 100% 0, 100% 35%, 0 35%);
+    }
+
+    .glitch::after {
+      color: #ff00ff;
+      animation: glitch-2 0.3s infinite;
+      clip-path: polygon(0 65%, 100% 65%, 100% 100%, 0 100%);
+    }
+
+    @keyframes glitch {
+      0%, 100% { transform: translate(0); }
+      20% { transform: translate(-2px, 2px); }
+      40% { transform: translate(-2px, -2px); }
+      60% { transform: translate(2px, 2px); }
+      80% { transform: translate(2px, -2px); }
+    }
+
+    @keyframes glitch-1 {
+      0%, 100% { transform: translate(0); }
+      20% { transform: translate(3px, 0); }
+      40% { transform: translate(-3px, 0); }
+      60% { transform: translate(3px, 0); }
+      80% { transform: translate(-3px, 0); }
+    }
+
+    @keyframes glitch-2 {
+      0%, 100% { transform: translate(0); }
+      20% { transform: translate(-3px, 0); }
+      40% { transform: translate(3px, 0); }
+      60% { transform: translate(-3px, 0); }
+      80% { transform: translate(3px, 0); }
+    }
+
+    .status-text {
+      font-size: 1.5rem;
+      color: #00ff00;
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    .typing::after {
+      content: "█";
+      animation: blink 0.7s step-end infinite;
+    }
+
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0; }
+    }
+
+    .panel {
+      background: rgba(0, 20, 0, 0.8);
+      border: 2px solid #00ff00;
+      padding: 30px;
+      width: 100%;
+      max-width: 600px;
+      box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(0, 255, 0, 0.2);
+      font-size: 1.3rem;
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+    }
+
+    .label {
+      color: #00cc00;
+    }
+
+    .value {
+      color: #ffffff;
+      text-align: right;
+      max-width: 60%;
+      word-break: break-all;
+    }
+
+    .value.scanning {
+      color: #ffff00;
+    }
+
+    .progress-section {
+      margin-top: 30px;
+      width: 100%;
+    }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 1.2rem;
+      margin-bottom: 10px;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 25px;
+      background: #0a1a0a;
+      border: 1px solid #00ff00;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #003300, #00ff00, #003300);
+      background-size: 200% 100%;
+      animation: shimmer 1s linear infinite;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: default;
+    }
+
+    .modal {
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+      border: 3px solid #00ff00;
+      padding: 40px;
+      max-width: 500px;
+      text-align: center;
+      box-shadow: 0 0 50px rgba(0, 255, 0, 0.5);
+      cursor: default;
+    }
+
+    .modal-title {
+      font-size: 2.5rem;
+      color: #ffff00;
+      margin-bottom: 20px;
+    }
+
+    .modal-icon {
+      font-size: 4rem;
+      margin-bottom: 20px;
+    }
+
+    .modal-text {
+      font-size: 1.4rem;
+      color: #ffffff;
+      line-height: 1.8;
+      margin-bottom: 30px;
+    }
+
+    .modal-btn {
+      background: #00ff00;
+      color: #000;
+      border: none;
+      padding: 15px 50px;
+      font-family: 'VT323', monospace;
+      font-size: 1.5rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .modal-btn:hover {
+      background: #00cc00;
+      box-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
+    }
+
+    .fullscreen-prompt {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 1.2rem;
+      color: #00ff00;
+      animation: pulse 2s infinite;
+      z-index: 10;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 768px) {
+      .glitch {
+        font-size: 2rem;
+      }
+
+      .status-text {
+        font-size: 1.2rem;
+      }
+
+      .info-row {
+        font-size: 1.1rem;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .value {
+        text-align: left;
+        max-width: 100%;
+      }
+
+      .panel {
+        padding: 20px;
+      }
+
+      .modal {
+        margin: 20px;
+        padding: 30px 20px;
+      }
+
+      .modal-title {
+        font-size: 2rem;
+      }
+
+      .modal-text {
+        font-size: 1.2rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="matrix-bg"></canvas>
+  <div class="scanlines"></div>
+
+  <div class="container" id="main-container">
+    <div class="header">
+      <h1 class="glitch" data-text="BREACH DETECTED">BREACH DETECTED</h1>
+      <p class="status-text typing" id="status-text">INICIANDO ANÁLISIS...</p>
+    </div>
+
+    <div class="panel">
+      <div class="info-row">
+        <span class="label">DIRECCIÓN IP:</span>
+        <span class="value scanning" id="ip">ESCANEANDO...</span>
+      </div>
+      <div class="info-row">
+        <span class="label">DISPOSITIVO:</span>
+        <span class="value scanning" id="device">ESCANEANDO...</span>
+      </div>
+      <div class="info-row">
+        <span class="label">NAVEGADOR:</span>
+        <span class="value scanning" id="browser">ESCANEANDO...</span>
+      </div>
+      <div class="info-row">
+        <span class="label">SISTEMA OPERATIVO:</span>
+        <span class="value scanning" id="os">ESCANEANDO...</span>
+      </div>
+      <div class="info-row">
+        <span class="label">RESOLUCIÓN:</span>
+        <span class="value scanning" id="resolution">ESCANEANDO...</span>
+      </div>
+      <div class="info-row">
+        <span class="label">IDIOMA:</span>
+        <span class="value scanning" id="language">ESCANEANDO...</span>
+      </div>
+      <div class="info-row">
+        <span class="label">ZONA HORARIA:</span>
+        <span class="value scanning" id="timezone">ESCANEANDO...</span>
+      </div>
+
+      <div class="progress-section">
+        <div class="progress-label">
+          <span>PROCESO DE EXTRACCIÓN</span>
+          <span id="progress-text">0%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <p class="fullscreen-prompt" id="fullscreen-prompt">Presiona cualquier tecla o haz clic para pantalla completa</p>
+  </div>
+
+  <div class="modal-overlay" id="modal">
+    <div class="modal">
+      <div class="modal-icon">⚠️</div>
+      <h2 class="modal-title">DEMO DE SEGURIDAD</h2>
+      <p class="modal-text">
+        Esto fue un ejemplo de lo que sucede cuando no proteges tus dispositivos o instalas software sospechoso.
+      </p>
+      <button class="modal-btn" id="close-btn">Entendido</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/ua-parser-js@2.0.0/dist/ua-parser.min.js"></script>
+  <script>
+    const canvas = document.getElementById('matrix-bg');
+    const ctx = canvas.getContext('2d');
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const fontSize = 14;
+    const columns = canvas.width / fontSize;
+    const drops = [];
+
+    for (let i = 0; i < columns; i++) {
+      drops[i] = Math.random() * canvas.height;
+    }
+
+    function drawMatrix() {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#00ff00';
+      ctx.font = fontSize + 'px VT323';
+
+      for (let i = 0; i < drops.length; i++) {
+        const char = chars[Math.floor(Math.random() * chars.length)];
+        ctx.fillText(char, i * fontSize, drops[i]);
+
+        if (drops[i] > canvas.height && Math.random() > 0.975) {
+          drops[i] = 0;
+        }
+        drops[i] += fontSize;
+      }
+    }
+
+    setInterval(drawMatrix, 50);
+
+    window.addEventListener('resize', () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    });
+
+    let fullscreenEnabled = false;
+    let dataCollected = false;
+    const statusMessages = [
+      'INICIANDO ANÁLISIS...',
+      'CONECTANDO CON SERVIDOR...',
+      'OBTENIENDO INFORMACIÓN...',
+      'ANALIZANDO DISPOSITIVO...',
+      'BREACH EXITOSO'
+    ];
+
+    const parser = new UAParser();
+    const result = parser.getResult();
+
+    const clientData = {
+      ip: 'OBTENIENDO...',
+      device: result.device.type ? result.device.type.toUpperCase() : 'DESKTOP',
+      browser: `${result.browser.name || 'Unknown'} ${result.browser.major || ''}`.trim(),
+      os: `${result.os.name || 'Unknown'} ${result.os.version || ''}`.trim(),
+      resolution: `${window.screen.width}x${window.screen.height}`,
+      language: navigator.language || 'Unknown',
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Unknown'
+    };
+
+    async function getIP() {
+      try {
+        const response = await fetch('https://api.ipify.org?format=json');
+        const data = await response.json();
+        clientData.ip = data.ip;
+        document.getElementById('ip').textContent = data.ip;
+        document.getElementById('ip').classList.remove('scanning');
+      } catch (error) {
+        clientData.ip = 'BLOQUEADO';
+        document.getElementById('ip').textContent = 'BLOQUEADO';
+        document.getElementById('ip').classList.remove('scanning');
+      }
+    }
+
+    function updateStatus(index) {
+      document.getElementById('status-text').textContent = statusMessages[index];
+    }
+
+    function updateData() {
+      document.getElementById('device').textContent = clientData.device;
+      document.getElementById('device').classList.remove('scanning');
+    }
+
+    function updateBrowser() {
+      document.getElementById('browser').textContent = clientData.browser;
+      document.getElementById('browser').classList.remove('scanning');
+    }
+
+    function updateOS() {
+      document.getElementById('os').textContent = clientData.os;
+      document.getElementById('os').classList.remove('scanning');
+    }
+
+    function updateResolution() {
+      document.getElementById('resolution').textContent = clientData.resolution;
+      document.getElementById('resolution').classList.remove('scanning');
+    }
+
+    function updateLanguage() {
+      document.getElementById('language').textContent = clientData.language;
+      document.getElementById('language').classList.remove('scanning');
+    }
+
+    function updateTimezone() {
+      document.getElementById('timezone').textContent = clientData.timezone;
+      document.getElementById('timezone').classList.remove('scanning');
+    }
+
+    function updateProgress(percent) {
+      document.getElementById('progress-fill').style.width = percent + '%';
+      document.getElementById('progress-text').textContent = percent + '%';
+    }
+
+    function enableFullscreen() {
+      if (!fullscreenEnabled) {
+        fullscreenEnabled = true;
+        document.getElementById('fullscreen-prompt').classList.add('hidden');
+        
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+          elem.requestFullscreen().catch(() => {});
+        } else if (elem.webkitRequestFullscreen) {
+          elem.webkitRequestFullscreen();
+        } else if (elem.msRequestFullscreen) {
+          elem.msRequestFullscreen();
+        }
+      }
+    }
+
+    function showModal() {
+      document.getElementById('modal').style.display = 'flex';
+    }
+
+    function closeModal() {
+      document.getElementById('modal').style.display = 'none';
+      
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+      }
+
+      setTimeout(() => {
+        window.location.href = 'https://meet.hidrodigital.com/';
+      }, 500);
+    }
+
+    document.addEventListener('keydown', enableFullscreen);
+    document.addEventListener('click', enableFullscreen);
+    document.getElementById('close-btn').addEventListener('click', closeModal);
+
+    async function startSequence() {
+      updateStatus(0);
+      await getIP();
+      
+      await new Promise(r => setTimeout(r, 1500));
+      updateStatus(1);
+      
+      await new Promise(r => setTimeout(r, 1000));
+      updateData();
+      updateProgress(15);
+      updateStatus(2);
+      
+      await new Promise(r => setTimeout(r, 1500));
+      updateBrowser();
+      updateProgress(30);
+      
+      await new Promise(r => setTimeout(r, 1500));
+      updateOS();
+      updateProgress(45);
+      
+      await new Promise(r => setTimeout(r, 1500));
+      updateResolution();
+      updateProgress(60);
+      
+      await new Promise(r => setTimeout(r, 1500));
+      updateLanguage();
+      updateProgress(75);
+      
+      await new Promise(r => setTimeout(r, 1500));
+      updateTimezone();
+      updateProgress(90);
+      
+      await new Promise(r => setTimeout(r, 1000));
+      updateProgress(100);
+      updateStatus(4);
+      
+      await new Promise(r => setTimeout(r, 2000));
+      showModal();
+    }
+
+    setTimeout(startSequence, 500);
+  </script>
+</body>
+</html>
